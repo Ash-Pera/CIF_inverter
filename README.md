@@ -4,6 +4,7 @@ and will produce a series of output .cif's that step through an inversion throug
 the unit cell.
 
 It's very fragile (I didn't know about PyCIFRW when I wrote this), but seems to work okay
+To get the P1 .cif, use CrystalMaker and discard symmetry, then export to .cif
 It's designed to work with CrystalMaker's animation feature, so you can see the inversion.
 Just open up the structures pane and drop the output files in (I can't figure out how 
 Crystal Maker desieds the order, so maybe one at a time?), then you can play or export the 
