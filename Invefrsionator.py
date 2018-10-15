@@ -1,3 +1,7 @@
+#CIF_inverter
+#site: https://github.com/Ash-Pera/CIF_inverter
+#written by Ash Pera
+
 from typing import Dict, Tuple, List
 from itertools import islice
 import os
