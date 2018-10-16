@@ -2,199 +2,81 @@
 #site: https://github.com/Ash-Pera/CIF_inverter
 #written by Ash Pera
 
+import CifFile as cf
 from typing import Dict, Tuple, List
-from itertools import islice
 import os
-import copy
 
-def lerp (a: float, b: float, total_steps: int, current_step: int) :
-    diff = b - a;
-    diff = diff / total_steps
-    return a + diff * current_step
+#inputFileName: str = input(".cif file name:")
+inputFileName = "other_PZT.cif"
+inFile = cf.ReadCif(inputFileName)
 
-class Atom:
-    legend: Dict[int, str] = dict()
-    reverseLegend: Dict[str, int] = dict()
+inputFileName = inputFileName[0:-4]
 
-    def fill_self(self) :
-        self.data_vals = [None] * len(Atom.legend)
+#probably only one, right?
+dataBlock = inFile[inFile.keys()[0]]
 
-
-    def __init__(self):
-        self.data_vals = [];
-        self.fill_self()
-
-    def getXIndex():
-        return Atom.reverseLegend["_atom_site_fract_x\n"]
-    def getYIndex():
-        return Atom.reverseLegend["_atom_site_fract_y\n"]
-    def getZIndex():
-        return Atom.reverseLegend["_atom_site_fract_z\n"]
-
-    def getX(self) -> float:
-        return float(self.data_vals[Atom.getXIndex()])
-    def getY(self) -> float:
-        return float(self.data_vals[Atom.getYIndex()])
-    def getZ(self) -> float:
-        return float(self.data_vals[Atom.getZIndex()])
-
-   
-    def setX(self, x) :
-        self.data_vals[Atom.getXIndex()] = x
-    def setY(self, y) :
-        self.data_vals[Atom.getYIndex()] = y
-    def setZ(self, z) :
-        self.data_vals[Atom.getZIndex()] = z
-
-    def setXYZ(self, x,y,z) :
-       self.setX(x)
-       self.setY(y)
-       self.setZ(z)
-
-    def normalize(self):
-        if self.getX() > 1.0:
-            self.setX(self.getX() % 1)
-        if self.getY() > 1.0:
-            self.setY(self.getY() % 1)
-        if self.getZ() > 1.0:
-            self.setZ(self.getZ() % 1)
-    
-    def slerp(self, total_steps: int, current_step : int):
-        newAtom = Atom()
-        newAtom.data_vals = self.data_vals.copy()
-        oldX = self.getX()
-        oldY = self.getY()
-        oldZ = self.getZ()
-
-        newX = lerp(oldX, -(oldX - 0.5)+0.5, total_steps, current_step)
-        newY = lerp(oldY, -(oldY - 0.5)+0.5, total_steps, current_step)
-        newZ = lerp(oldZ, -(oldZ - 0.5)+0.5, total_steps, current_step)
-
-        newAtom.data_vals[Atom.getXIndex()] = newX
-        newAtom.data_vals[Atom.getYIndex()] = newY
-        newAtom.data_vals[Atom.getZIndex()] = newZ
-        return newAtom
-    def __add__(self, other_atom):
-        newAtom: Atom = Atom()
-        newAtom.data_vals = self.data_vals.copy()
-        newX = self.getX() + other_atom.getX()
-        newY = self.getY() + other_atom.getY()
-        newZ = self.getZ() + other_atom.getZ()
-
-        newAtom.data_vals[Atom.getXIndex()] = newX
-        newAtom.data_vals[Atom.getYIndex()] = newY
-        newAtom.data_vals[Atom.getZIndex()] = newZ
-        return newAtom
-
-    def __eq__(self, other):
-        return self.data_vals == other.data_vals
-    
-    def __hash__(self):
-        return tuple(self.data_vals).__hash__()
+from Atom import Atom
 
 
 
-atomsList = [];
+atomSpecs = []
 
-def try_parse_float(s: str, base: int = 10):
-  try:
-    return float(s)
-  except ValueError:
-    return s
+for key in dataBlock.keys():
+    if "atom" in key:
+        atomSpecs.append(key)
+        Atom.reverseLegend[key] = len(Atom.reverseLegend)
+
+numAtoms = len(dataBlock[atomSpecs[0]])
+
+atomList = []
+
+for i in range(numAtoms):
+    atom = Atom()
+    for spec in atomSpecs:
+        atom[spec] = dataBlock[spec][i]
+    atomList.append(atom)
+
+print("Loaded atoms as:\n" + str(atomList))
+print("\n\n\n")
+
+symAtomList = []
+for atom in atomList:
+    symAtomList.extend(atom.cell_edge_copies())
+
+print("Copied atoms to unit cell boundries:\n" + str(symAtomList))
 
 
-inputFileName = input("Input file name (no extension):")
-#inputFileName: str = "Symmetry_free_PZT_reg"
-ext: str = ".cif"
 
+def atom_list_to_dic_list(atomList: List[Atom]) -> Dict[str, List[str]] :
+    outputDict: Dict(str, List[str]) = dict()
+    for key in atomSpecs:
+        outputDict[key] = []
 
-startOfData: int = 0;
-with open(inputFileName + ext, "r") as cif_file:
-    line: str = cif_file.readline()
-    lineNumber: int = 1
-    while line:
-        if "loop_" in line :
-            line = cif_file.readline()
-            lineNumber += 1
-            
-            if "_atom_site_label" in line :
-                break;
-            if "_symmetry_equiv_pos_as_xyz" in line :
-                print("cif file might contain symmetry, this program doesn't handle that yet")
-            continue;
+    for atom in atomList:
+        for key,val in atom.data_vals.items():
+            outputDict[key].append(val)
+    return outputDict
         
-        line = cif_file.readline()
-        lineNumber += 1
-    
-    
-
-    count: int = 0
-    while "_" in line:
-        Atom.legend[count] = line
-        Atom.reverseLegend[line] = count
-        count += 1
-        line = cif_file.readline()
-        lineNumber += 1
-    
-    count = 0;
-    startOfData = lineNumber;
-    print("Loading data as:")
-    while "." in line:
-        words = line.split()
-        atomsList.append(Atom());
-        atomsList[count].data_vals = words;
-        print(atomsList[count].data_vals)
-        count += 1
-        line = cif_file.readline()
-        lineNumber += 1
-
-print("Finished loading data")
+def lerp_invert_atoms(atomList: List[Atom], num_steps:int, current_step:int) -> List[Atom] :
+    newAtomList = []
+    for atom in atomList:
+        newAtomList.append(atom.lerp_to_inversion(num_steps,current_step))
+    return newAtomList
 
 
-symmetryEqPoints: List[Atom] = []
-for i in range(2):
-    for j in range(2):
-        for k in range(2):
-            tempAtom: Atom = Atom()
-            tempAtom.setXYZ(i,j,k)
-            symmetryEqPoints.append(tempAtom)
-
-def symmetricallyEqAtoms(atom: Atom) -> List[Atom] :
-    tempSet = set()
-    for symAtom in symmetryEqPoints:
-        tempAtom = copy.deepcopy(atom)
-        tempAtom = tempAtom + symAtom
-        tempAtom.normalize()
-        tempSet.add(tempAtom)
-    return tempSet
-
-
-
-with open(inputFileName + ext, "r") as cif_file:
-    nonDataList = list(islice(cif_file, startOfData - 1))
-
-
-
-output_folder_name: str = "output/"
+number_of_steps = int(input("number of steps:"))
 
 try:
-    os.mkdir(output_folder_name);
+    os.mkdir("output/");
 except FileExistsError: 
     print("/output folder already exits, using that")
-steps: int = int(input("Number of steps:"))
 
-for i in range(steps) :
-    atomsList[0].slerp(steps, i)
+for i in range(number_of_steps+1):
+    newData: Dict[str, List[str]] = atom_list_to_dic_list(lerp_invert_atoms(symAtomList, number_of_steps, i))
 
-sym_adap_atom_list = []
+    for key, dataList in newData.items():
+        dataBlock[key] = dataList
 
-for atom in atomsList:
-    sym_adap_atom_list += symmetricallyEqAtoms(atom)
-
-
-for i in range(steps+1) :
-    with open(output_folder_name + inputFileName + ("%02d" % (i,)) + ext, "w") as out_file:
-        out_file.writelines(nonDataList)
-        for atom in sym_adap_atom_list:
-
-            out_file.write(" ".join(str(x) for x in atom.slerp(steps, i).data_vals) + "\n")
+    with open("output/" + inputFileName + str(i) + ".cif", "w") as out_file :
+        out_file.write(str(inFile))
+    #print("Saved file #" + str(i))
